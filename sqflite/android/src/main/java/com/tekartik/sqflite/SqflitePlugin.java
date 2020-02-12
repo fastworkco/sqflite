@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
@@ -64,7 +65,7 @@ import static com.tekartik.sqflite.Constant.TAG;
 /**
  * SqflitePlugin Android implementation
  */
-public class SqflitePlugin implements MethodCallHandler {
+public class SqflitePlugin implements FlutterPlugin, MethodCallHandler {
 
     static final Map<String, Integer> _singleInstancesByPath = new HashMap<>();
     static private boolean QUERY_AS_MAP_LIST = false; // set by options
@@ -75,25 +76,27 @@ public class SqflitePlugin implements MethodCallHandler {
     static private final Object openCloseLocker = new Object();
     // local cache
     static String databasesPath;
-    static private Context context;
+    private Context context;
     static private int databaseId = 0; // incremental database id
     // Database thread execution
     static private HandlerThread handlerThread;
     static private Handler handler;
 
+    private MethodChannel methodChannel;
+
     @SuppressLint("UseSparseArrays")
     static final Map<Integer, Database> databaseMap = new HashMap<>();
 
-    SqflitePlugin(Context context) {
-        this.context = context;
-    }
+    public SqflitePlugin() {}
 
     //
     // Plugin registration.
     //
     public static void registerWith(Registrar registrar) {
-        final MethodChannel channel = new MethodChannel(registrar.messenger(), "com.tekartik.sqflite");
-        channel.setMethodCallHandler(new SqflitePlugin(registrar.context()));
+        SqflitePlugin instance = new SqflitePlugin();
+        instance.methodChannel = new MethodChannel(registrar.messenger(), "com.tekartik.sqflite");
+        instance.context = registrar.context();
+        instance.methodChannel.setMethodCallHandler(instance);
     }
 
     private static Object cursorValue(Cursor cursor, int index) {
@@ -1008,6 +1011,19 @@ public class SqflitePlugin implements MethodCallHandler {
             databasesPath = file.getParent();
         }
         result.success(databasesPath);
+    }
+
+    @Override
+    public void onAttachedToEngine(FlutterPluginBinding binding) {
+        methodChannel = new MethodChannel(binding.getFlutterEngine().getDartExecutor(), "com.tekartik.sqflite");
+        context = binding.getApplicationContext();
+        methodChannel.setMethodCallHandler(new SqflitePlugin());
+    }
+
+    @Override
+    public void onDetachedFromEngine(FlutterPluginBinding binding) {
+        methodChannel.setMethodCallHandler(null);
+        methodChannel = null;
     }
 
     private class BgResult implements Result {
